@@ -3,6 +3,9 @@ package main
 import (
 	"flag"
 	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"cri-shim/pkg/server"
@@ -28,4 +31,16 @@ func main() {
 		slog.Error("failed to start server", err)
 		return
 	}
+
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
+
+	stopCh := make(chan struct{}, 1)
+	select {
+	case <-signalCh:
+		close(stopCh)
+	case <-stopCh:
+	}
+	_ = os.Remove(shimSocket)
+	slog.Info("shutting down the image_shim")
 }
