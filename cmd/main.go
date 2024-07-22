@@ -20,12 +20,12 @@ func main() {
 		CRISocket:  criSocket,
 	})
 	if err != nil {
-		slog.Error("failed to create server: %v", err)
+		slog.Error("failed to create server", err)
 		return
 	}
 	err = s.Start()
 	if err != nil {
-		slog.Error("failed to start server: %v", err)
+		slog.Error("failed to start server", err)
 		return
 	}
 }

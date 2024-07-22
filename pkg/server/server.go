@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	netutil "cri-shim/pkg/net"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
@@ -49,7 +50,7 @@ func (s *Server) Start() error {
 	go func() {
 		_ = s.server.Serve(s.listener)
 	}()
-	conn, err := grpc.Dial(s.options.CRISocket)
+	conn, err := grpc.NewClient(s.options.CRISocket, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return err
 	}
