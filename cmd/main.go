@@ -31,6 +31,7 @@ func main() {
 		slog.Error("failed to start server", err)
 		return
 	}
+	slog.Info("server started")
 
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
