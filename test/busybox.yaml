@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: commit-test
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: commit
+  namespace: commit-test
+spec:
+  containers:
+    - name: busybox-1
+      image: busybox:latest
+      command: [ "sleep", "3600000" ]
+      restartPolicy: Always
+      env:
+        - name: SEALOS_COMMIT_ON_STOP
+          value: "true"
+    - name: busybox-2
+      image: busybox:latest
+      command: [ "sleep", "3600000" ]
+      restartPolicy: Always
+      env:
+        - name: SEALOS_COMMIT_ON_STOP
+          value: "false"

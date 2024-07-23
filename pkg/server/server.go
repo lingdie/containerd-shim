@@ -2,13 +2,14 @@ package server
 
 import (
 	"context"
+	"cri-shim/pkg/container"
+	"cri-shim/pkg/types"
 	"encoding/json"
 	"log/slog"
 	"net"
 	"os"
 	"time"
 
-	"cri-shim/pkg/container"
 	netutil "cri-shim/pkg/net"
 
 	"google.golang.org/grpc"
@@ -136,12 +137,6 @@ func (s *Server) RemoveContainer(ctx context.Context, request *runtimeapi.Remove
 		return nil, err
 	}
 
-	info := &container.Info{}
-	if err := json.Unmarshal([]byte(statusResp.Info["info"]), info); err != nil {
-		slog.Error("failed to unmarshal container info", "error", err)
-	}
-	slog.Debug("Got container info env", "info env", info.Config.Envs)
-
 	if ContainerNeedCommit(statusResp) {
 		// todo report failed to commit containers
 		// skip commit if container is not running
@@ -265,5 +260,15 @@ func (s *Server) RuntimeConfig(ctx context.Context, request *runtimeapi.RuntimeC
 
 // ContainerNeedCommit checks if the container needs to be committed before removal.
 func ContainerNeedCommit(resp *runtimeapi.ContainerStatusResponse) bool {
+	info := &container.Info{}
+	if err := json.Unmarshal([]byte(resp.Info["info"]), info); err != nil {
+		slog.Error("failed to unmarshal container info", "error", err)
+	}
+	slog.Debug("Got container info env", "info env", info.Config.Envs)
+	for _, env := range info.Config.Envs {
+		if env.Key == types.ContainerCommitOnStopEnvFlag && env.Value == types.ContainerCommitOnStopEnvEnableValue {
+			return true
+		}
+	}
 	return false
 }
