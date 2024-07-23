@@ -49,9 +49,6 @@ func New(options Options) (*Server, error) {
 }
 
 func (s *Server) Start() error {
-	go func() {
-		_ = s.server.Serve(s.listener)
-	}()
 	conn, err := grpc.NewClient(s.options.CRISocket, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return err
@@ -59,6 +56,9 @@ func (s *Server) Start() error {
 	s.client = runtimeapi.NewRuntimeServiceClient(conn)
 	dump.Pretty(s.client)
 	runtimeapi.RegisterRuntimeServiceServer(s.server, s)
+	go func() {
+		_ = s.server.Serve(s.listener)
+	}()
 	return netutil.WaitForServer(s.options.ShimSocket, time.Second)
 }
 
