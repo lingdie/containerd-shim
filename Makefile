@@ -92,7 +92,7 @@ production/deploy: confirm tidy audit no-dirty
 	# Include additional deployment steps here...
 
 systemd/install:
-	sudo mkdir /var/run/sealos
+	sudo mkdir -p /var/run/sealos
 	sudo cp ./systemd/containerd-shim.service /etc/systemd/system/containerd-shim.service
 	sudo systemctl daemon-reload
 	sudo systemctl enable containerd-shim
