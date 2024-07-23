@@ -74,7 +74,7 @@ func (s *Server) Version(ctx context.Context, request *runtimeapi.VersionRequest
 		slog.Error("failed to get version", "error", err)
 		return resp, err
 	}
-	slog.Info("Got version response", "response", resp)
+	slog.Debug("Got version response", "response", resp)
 	return resp, err
 }
 
@@ -121,7 +121,26 @@ func (s *Server) StopContainer(ctx context.Context, request *runtimeapi.StopCont
 }
 
 func (s *Server) RemoveContainer(ctx context.Context, request *runtimeapi.RemoveContainerRequest) (*runtimeapi.RemoveContainerResponse, error) {
-	slog.Info("Doing remove container request", "request", request)
+	slog.Debug("Doing remove container request", "request", request)
+
+	statusReq := &runtimeapi.ContainerStatusRequest{
+		ContainerId: request.ContainerId,
+		Verbose:     true,
+	}
+	statusResp, err := s.client.ContainerStatus(ctx, statusReq)
+	if err != nil {
+		slog.Error("failed to get container status", "error", err)
+		return nil, err
+	}
+
+	if ContainerNeedCommit(statusResp) {
+		// todo report failed to commit containers
+		// skip commit if container is not running
+		if statusResp.Status.State != runtimeapi.ContainerState_CONTAINER_RUNNING {
+			// do something, should we remove container if we can't commit it?
+		}
+	}
+
 	return s.client.RemoveContainer(ctx, request)
 }
 
@@ -139,12 +158,6 @@ func (s *Server) ContainerStatus(ctx context.Context, request *runtimeapi.Contai
 		return resp, err
 	}
 	slog.Debug("Got container status response", "response", resp)
-
-	if resp.Info != nil {
-		for k, v := range resp.Info {
-			slog.Debug("Container status", "key", k, "value", v)
-		}
-	}
 	return resp, err
 }
 
@@ -239,4 +252,9 @@ func (s *Server) ListPodSandboxMetrics(ctx context.Context, request *runtimeapi.
 func (s *Server) RuntimeConfig(ctx context.Context, request *runtimeapi.RuntimeConfigRequest) (*runtimeapi.RuntimeConfigResponse, error) {
 	slog.Info("Doing runtime config request", "request", request)
 	return s.client.RuntimeConfig(ctx, request)
+}
+
+// ContainerNeedCommit checks if the container needs to be committed before removal.
+func ContainerNeedCommit(resp *runtimeapi.ContainerStatusResponse) bool {
+	return false
 }
