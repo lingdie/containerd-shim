@@ -1,10 +1,7 @@
 package server
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net"
 	"os"
@@ -141,24 +138,14 @@ func (s *Server) ContainerStatus(ctx context.Context, request *runtimeapi.Contai
 		slog.Error("failed to get container status", "error", err)
 		return resp, err
 	}
-	slog.Info("Got container status response", "response", resp)
-	PrettyPrint(resp.Info)
-	return resp, err
-}
+	slog.Debug("Got container status response", "response", resp)
 
-func PrettyPrint(v interface{}) {
-	b, err := json.Marshal(v)
-	if err != nil {
-		fmt.Println(v)
-		return
+	if resp.Info != nil {
+		for k, v := range resp.Info {
+			slog.Debug("Container status", "key", k, "value", v)
+		}
 	}
-	var out bytes.Buffer
-	err = json.Indent(&out, b, "", "  ")
-	if err != nil {
-		fmt.Println(v)
-		return
-	}
-	fmt.Println(out.String())
+	return resp, err
 }
 
 func (s *Server) UpdateContainerResources(ctx context.Context, request *runtimeapi.UpdateContainerResourcesRequest) (*runtimeapi.UpdateContainerResourcesResponse, error) {
