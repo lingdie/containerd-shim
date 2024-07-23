@@ -2,12 +2,15 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net"
 	"os"
 	"time"
 
+	"cri-shim/pkg/container"
 	netutil "cri-shim/pkg/net"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -132,6 +135,12 @@ func (s *Server) RemoveContainer(ctx context.Context, request *runtimeapi.Remove
 		slog.Error("failed to get container status", "error", err)
 		return nil, err
 	}
+
+	info := &container.Info{}
+	if err := json.Unmarshal([]byte(statusResp.Info["info"]), info); err != nil {
+		slog.Error("failed to unmarshal container info", "error", err)
+	}
+	slog.Debug("Got container info env", "info env", info.Config.Envs)
 
 	if ContainerNeedCommit(statusResp) {
 		// todo report failed to commit containers
