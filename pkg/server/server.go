@@ -2,8 +2,6 @@ package server
 
 import (
 	"context"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/test/bufconn"
 	"log/slog"
 	"net"
 	"os"
@@ -11,6 +9,9 @@ import (
 
 	netutil "cri-shim/pkg/net"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/test/bufconn"
+	"k8s.io/apimachinery/pkg/util/dump"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 )
 
@@ -44,7 +45,6 @@ func New(options Options) (*Server, error) {
 		server:   server,
 		listener: listener,
 		options:  options,
-		//bufListener: bufconn.Listen(1024 * 1024),
 	}, nil
 }
 
@@ -52,17 +52,12 @@ func (s *Server) Start() error {
 	go func() {
 		_ = s.server.Serve(s.listener)
 	}()
-	//withDialer := func(l *bufconn.Listener) grpc.DialOption {
-	//	return grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-	//		return l.Dial()
-	//	})
-	//}
-	//conn, err := grpc.NewClient(s.options.CRISocket, grpc.WithTransportCredentials(insecure.NewCredentials()), withDialer(s.bufListener))
 	conn, err := grpc.NewClient(s.options.CRISocket, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return err
 	}
 	s.client = runtimeapi.NewRuntimeServiceClient(conn)
+	dump.Pretty(s.client)
 	runtimeapi.RegisterRuntimeServiceServer(s.server, s)
 	return netutil.WaitForServer(s.options.ShimSocket, time.Second)
 }
