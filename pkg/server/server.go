@@ -116,6 +116,7 @@ func (s *Server) StartContainer(ctx context.Context, request *runtimeapi.StartCo
 func (s *Server) StopContainer(ctx context.Context, request *runtimeapi.StopContainerRequest) (*runtimeapi.StopContainerResponse, error) {
 	// todo check container env and create commit
 	slog.Info("Doing stop container request", "request", request)
+
 	return s.client.StopContainer(ctx, request)
 }
 
@@ -131,7 +132,14 @@ func (s *Server) ListContainers(ctx context.Context, request *runtimeapi.ListCon
 
 func (s *Server) ContainerStatus(ctx context.Context, request *runtimeapi.ContainerStatusRequest) (*runtimeapi.ContainerStatusResponse, error) {
 	slog.Info("Doing container status request", "request", request)
-	return s.client.ContainerStatus(ctx, request)
+	request.Verbose = true
+	resp, err := s.client.ContainerStatus(ctx, request)
+	if err != nil {
+		slog.Error("failed to get container status", "error", err)
+		return resp, err
+	}
+	slog.Info("Got container status response", "response", resp)
+	return resp, err
 }
 
 func (s *Server) UpdateContainerResources(ctx context.Context, request *runtimeapi.UpdateContainerResourcesRequest) (*runtimeapi.UpdateContainerResourcesResponse, error) {
