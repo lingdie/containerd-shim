@@ -11,7 +11,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
-	"k8s.io/apimachinery/pkg/util/dump"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 )
 
@@ -54,8 +53,9 @@ func (s *Server) Start() error {
 		return err
 	}
 	s.client = runtimeapi.NewRuntimeServiceClient(conn)
-	dump.Pretty(s.client)
 	runtimeapi.RegisterRuntimeServiceServer(s.server, s)
+
+	// do serve after client is created and registered
 	go func() {
 		_ = s.server.Serve(s.listener)
 	}()
