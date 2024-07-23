@@ -2,16 +2,15 @@ package server
 
 import (
 	"context"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 	"log/slog"
 	"net"
 	"os"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-
 	netutil "cri-shim/pkg/net"
+	"google.golang.org/grpc"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 )
 
@@ -42,10 +41,10 @@ func New(options Options) (*Server, error) {
 	}
 	server := grpc.NewServer()
 	return &Server{
-		server:      server,
-		listener:    listener,
-		options:     options,
-		bufListener: bufconn.Listen(1024 * 1024),
+		server:   server,
+		listener: listener,
+		options:  options,
+		//bufListener: bufconn.Listen(1024 * 1024),
 	}, nil
 }
 
@@ -53,12 +52,13 @@ func (s *Server) Start() error {
 	go func() {
 		_ = s.server.Serve(s.listener)
 	}()
-	withDialer := func(l *bufconn.Listener) grpc.DialOption {
-		return grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-			return l.Dial()
-		})
-	}
-	conn, err := grpc.NewClient(s.options.CRISocket, grpc.WithTransportCredentials(insecure.NewCredentials()), withDialer(s.bufListener))
+	//withDialer := func(l *bufconn.Listener) grpc.DialOption {
+	//	return grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
+	//		return l.Dial()
+	//	})
+	//}
+	//conn, err := grpc.NewClient(s.options.CRISocket, grpc.WithTransportCredentials(insecure.NewCredentials()), withDialer(s.bufListener))
+	conn, err := grpc.NewClient(s.options.CRISocket, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return err
 	}
