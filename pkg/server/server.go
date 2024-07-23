@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"google.golang.org/grpc/test/bufconn"
 	"log/slog"
 	"net"
 	"os"
@@ -27,10 +28,11 @@ type Options struct {
 }
 
 type Server struct {
-	client   runtimeapi.RuntimeServiceClient
-	server   *grpc.Server
-	listener net.Listener
-	options  Options
+	client      runtimeapi.RuntimeServiceClient
+	server      *grpc.Server
+	listener    net.Listener
+	options     Options
+	bufListener *bufconn.Listener
 }
 
 func New(options Options) (*Server, error) {
@@ -40,9 +42,10 @@ func New(options Options) (*Server, error) {
 	}
 	server := grpc.NewServer()
 	return &Server{
-		server:   server,
-		listener: listener,
-		options:  options,
+		server:      server,
+		listener:    listener,
+		options:     options,
+		bufListener: bufconn.Listen(1024 * 1024),
 	}, nil
 }
 
@@ -50,7 +53,12 @@ func (s *Server) Start() error {
 	go func() {
 		_ = s.server.Serve(s.listener)
 	}()
-	conn, err := grpc.NewClient(s.options.CRISocket, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	withDialer := func(l *bufconn.Listener) grpc.DialOption {
+		return grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
+			return l.Dial()
+		})
+	}
+	conn, err := grpc.NewClient(s.options.CRISocket, grpc.WithTransportCredentials(insecure.NewCredentials()), withDialer(s.bufListener))
 	if err != nil {
 		return err
 	}
