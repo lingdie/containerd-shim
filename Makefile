@@ -90,3 +90,10 @@ production/deploy: confirm tidy audit no-dirty
 	GOOS=linux GOARCH=amd64 go build -ldflags='-s' -o=/tmp/bin/linux_amd64/${BINARY_NAME} ${MAIN_PACKAGE_PATH}
 	upx -5 /tmp/bin/linux_amd64/${BINARY_NAME}
 	# Include additional deployment steps here...
+
+systemd/install:
+	sudo mkdir /var/run/sealos
+	sudo cp ./systemd/containerd-shim.service /etc/systemd/system/containerd-shim.service
+	sudo systemctl daemon-reload
+	sudo systemctl enable containerd-shim
+	sudo systemctl start containerd-shim
