@@ -66,7 +66,13 @@ func (s *Server) Stop() {
 
 func (s *Server) Version(ctx context.Context, request *runtimeapi.VersionRequest) (*runtimeapi.VersionResponse, error) {
 	slog.Info("Doing version request", "request", request)
-	return s.client.Version(ctx, request)
+	resp, err := s.client.Version(ctx, request)
+	if err != nil {
+		slog.Error("failed to get version", "error", err)
+		return resp, err
+	}
+	slog.Info("Got version response", "response", resp)
+	return resp, err
 }
 
 func (s *Server) RunPodSandbox(ctx context.Context, request *runtimeapi.RunPodSandboxRequest) (*runtimeapi.RunPodSandboxResponse, error) {
