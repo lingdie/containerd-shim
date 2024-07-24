@@ -3,10 +3,9 @@ package types
 const (
 	ContainerCommitOnStopEnvFlag        = "SEALOS_COMMIT_ON_STOP"
 	ContainerCommitOnStopEnvEnableValue = "true"
-	Namespace                           = "k8s.io"
-	Register                            = "docker.io/username/"
-	Tag                                 = ":devbox"
-	RegisterLoginAddress                = ""
-	UserName                            = ""
-	Password                            = ""
+	ImageRegistryAddressOnEnv           = "SEALOS_COMMIT_IMAGE_REGISTRY"
+	ImageRegistryUserNameOnEnv          = "SEALOS_COMMIT_IMAGE_REGISTRY_USER"
+	ImageRegistryPasswordOnEnv          = "SEALOS_COMMIT_IMAGE_REGISTRY_PASSWORD"
+	ImageRegistryRepositoryOnEnv        = "SEALOS_COMMIT_IMAGE_REGISTRY_REPOSITORY"
+	ImageNameOnEnv                      = "SEALOS_COMMIT_IMAGE_NAME"
 )

@@ -6,12 +6,11 @@ import (
 	imageutil "cri-shim/pkg/image"
 	netutil "cri-shim/pkg/net"
 	"cri-shim/pkg/types"
-	"crypto/sha256"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -139,28 +138,24 @@ func (s *Server) RemoveContainer(ctx context.Context, request *runtimeapi.Remove
 		return nil, err
 	}
 
-	if ContainerNeedCommit(statusResp) {
+	registry, imageRef, flag, err := ContainerEnv(statusResp)
+
+	//commit image
+	if flag && err == nil {
 		// todo report failed to commit containers
 		// skip commit if container is not running
 		if statusResp.Status.State != runtimeapi.ContainerState_CONTAINER_RUNNING {
 			// do something, should we remove container if we can't commit it?
 		}
-		image := imageutil.NewImageInterface(types.Namespace, s.options.CRISocket, os.Stdout)
 
-		sha256Hash := sha256.New()
-		sha256Hash.Write([]byte(statusResp.Status.Id + time.Now().String()))
-		hash := fmt.Sprintf("%x", sha256Hash.Sum(nil))
-		if len(hash) > 12 {
-			hash = hash[:12]
-		}
+		image := imageutil.NewImageInterface(imageutil.DefaultNamespace, s.options.CRISocket, os.Stdout)
 
-		if err = image.Login(types.RegisterLoginAddress, types.UserName, types.Password); err != nil {
+		if err = image.Login(registry.LoginAddress, registry.UserName, registry.Password); err != nil {
 			slog.Error("failed to login register", "error", err)
 			return nil, err
 		}
 
-		imageRef := types.Register + hash + types.Tag
-		if err = image.Commit(imageRef, statusResp.Status.Id, false); err != nil {
+		if err = image.Commit(registry.GetImageRef(imageRef), statusResp.Status.Id, false); err != nil {
 			slog.Error("failed to commit container", "error", err)
 			return nil, err
 		}
@@ -279,17 +274,45 @@ func (s *Server) RuntimeConfig(ctx context.Context, request *runtimeapi.RuntimeC
 	return s.client.RuntimeConfig(ctx, request)
 }
 
-// ContainerNeedCommit checks if the container needs to be committed before removal.
-func ContainerNeedCommit(resp *runtimeapi.ContainerStatusResponse) bool {
+func ContainerEnv(resp *runtimeapi.ContainerStatusResponse) (*imageutil.Registry, string, bool, error) {
 	info := &container.Info{}
 	if err := json.Unmarshal([]byte(resp.Info["info"]), info); err != nil {
 		slog.Error("failed to unmarshal container info", "error", err)
+		return nil, "", false, err
 	}
 	slog.Debug("Got container info env", "info env", info.Config.Envs)
+	var registryName, userName, password, imageName, repo string
+	flag := false
+
+	envMap := map[string]*string{
+		types.ImageRegistryAddressOnEnv:    &registryName,
+		types.ImageRegistryUserNameOnEnv:   &userName,
+		types.ImageRegistryPasswordOnEnv:   &password,
+		types.ImageNameOnEnv:               &imageName,
+		types.ImageRegistryRepositoryOnEnv: &repo,
+	}
+
 	for _, env := range info.Config.Envs {
-		if env.Key == types.ContainerCommitOnStopEnvFlag && env.Value == types.ContainerCommitOnStopEnvEnableValue {
-			return true
+		if env.Key == types.ContainerCommitOnStopEnvFlag {
+			if env.Value != types.ContainerCommitOnStopEnvEnableValue {
+				return nil, "", false, nil
+			}
+			flag = true
+			continue
+		}
+
+		if target, exists := envMap[env.Key]; exists {
+			*target = env.Value
 		}
 	}
-	return false
+
+	if imageName == "" {
+		imageName = resp.Status.Image.Image
+		parts := strings.Split(imageName, "/")
+		if len(parts) > 1 {
+			imageName = strings.Join(parts[len(parts)-1:], "/")
+		}
+	}
+
+	return imageutil.NewRegistry(registryName, repo, userName, password), imageName, flag, nil
 }
