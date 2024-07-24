@@ -2,9 +2,12 @@ package image
 
 const (
 	DefaultName      = "docker.io"
-	DefaultUserName  = ""
-	DefaultPassword  = ""
 	DefaultNamespace = "k8s.io"
+)
+
+var (
+	DefaultUserName = ""
+	DefaultPassword = ""
 )
 
 type Registry struct {
