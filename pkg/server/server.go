@@ -7,6 +7,7 @@ import (
 	netutil "cri-shim/pkg/net"
 	"cri-shim/pkg/types"
 	"encoding/json"
+	"github.com/containerd/containerd/namespaces"
 	"log/slog"
 	"net"
 	"os"
@@ -37,6 +38,7 @@ type Server struct {
 	listener    net.Listener
 	options     Options
 	bufListener *bufconn.Listener
+	imageClient imageutil.ImageInterface
 }
 
 func New(options Options) (*Server, error) {
@@ -45,10 +47,16 @@ func New(options Options) (*Server, error) {
 		return nil, err
 	}
 	server := grpc.NewServer()
+
+	imageClient, err := imageutil.NewImageInterface(imageutil.DefaultNamespace, options.CRISocket, os.Stdout)
+	if err != nil {
+		return nil, err
+	}
 	return &Server{
-		server:   server,
-		listener: listener,
-		options:  options,
+		server:      server,
+		listener:    listener,
+		options:     options,
+		imageClient: imageClient,
 	}, nil
 }
 
@@ -70,6 +78,7 @@ func (s *Server) Start() error {
 func (s *Server) Stop() {
 	s.server.Stop()
 	s.listener.Close()
+	s.imageClient.Stop()
 }
 
 func (s *Server) Version(ctx context.Context, request *runtimeapi.VersionRequest) (*runtimeapi.VersionResponse, error) {
@@ -148,14 +157,14 @@ func (s *Server) RemoveContainer(ctx context.Context, request *runtimeapi.Remove
 			// do something, should we remove container if we can't commit it?
 		}
 
-		image := imageutil.NewImageInterface(imageutil.DefaultNamespace, s.options.CRISocket, os.Stdout)
+		ctx = namespaces.WithNamespace(ctx, imageutil.DefaultNamespace)
 
-		if err = image.Login(registry.LoginAddress, registry.UserName, registry.Password); err != nil {
+		if err = s.imageClient.Login(ctx, registry.LoginAddress, registry.UserName, registry.Password); err != nil {
 			slog.Error("failed to login register", "error", err)
 			return nil, err
 		}
 
-		if err = image.Commit(registry.GetImageRef(imageRef), statusResp.Status.Id, false); err != nil {
+		if err = s.imageClient.Commit(ctx, registry.GetImageRef(imageRef), statusResp.Status.Id, false); err != nil {
 			slog.Error("failed to commit container", "error", err)
 			return nil, err
 		}

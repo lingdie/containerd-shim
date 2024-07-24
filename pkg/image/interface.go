@@ -2,6 +2,7 @@ package image
 
 import (
 	"context"
+	"github.com/containerd/containerd"
 	"github.com/containerd/nerdctl/v2/pkg/api/types"
 	"github.com/containerd/nerdctl/v2/pkg/clientutil"
 	"github.com/containerd/nerdctl/v2/pkg/cmd/container"
@@ -10,125 +11,111 @@ import (
 	"io"
 )
 
-// ImageInterface 定义了镜像操作接口
+// ImageInterface defines the interface for image operations
 type ImageInterface interface {
-	Push(args []string) error
-	Commit(imageName, containerID string, pause bool) error
-	Login(serverAddress, username, password string) error
+	Push(ctx context.Context, args []string) error
+	Commit(ctx context.Context, imageName, containerID string, pause bool) error
+	Login(ctx context.Context, serverAddress, username, password string) error
+	Stop()
 }
 
-// imageInterfaceImpl 实现了 ImageInterface 接口
 type imageInterfaceImpl struct {
 	GlobalOptions types.GlobalCommandOptions
 	Stdout        io.Writer
+	Client        *containerd.Client
+	Cancel        context.CancelFunc
 }
 
-// NewImageInterface 返回一个新的 ImageInterface 实现
-// namespace: 命名空间
-// address: 容器运行时的地址
-// writer: 用于输出的 io.Writer
-func NewImageInterface(namespace, address string, writer io.Writer) ImageInterface {
-	return &imageInterfaceImpl{
-		GlobalOptions: types.GlobalCommandOptions{
-			Namespace: namespace,
-			Address:   address,
-		},
-		Stdout: writer,
+// NewImageInterface returns a new implementation of ImageInterface
+// address: the address of the container runtime
+// writer: the io.Writer for output
+func NewImageInterface(namespace, address string, writer io.Writer) (ImageInterface, error) {
+	global := types.GlobalCommandOptions{
+		Namespace: namespace,
+		Address:   address,
 	}
+	impl := &imageInterfaceImpl{
+		GlobalOptions: global,
+		Stdout:        writer,
+	}
+	var err error
+	impl.Client, _, impl.Cancel, err = clientutil.NewClient(context.Background(), global.Namespace, global.Address)
+	if err != nil {
+		return nil, err
+	}
+	return impl, err
 }
 
-// Commit 提交容器为镜像
-// imageName: 镜像名称
-// containerID: 容器 ID
-// pause: 是否暂停容器后commit
-func (impl *imageInterfaceImpl) Commit(imageName, containerID string, pause bool) error {
+func (impl *imageInterfaceImpl) Stop() {
+	impl.Cancel()
+}
+
+// Commit commits a container as an image
+// imageName: the name of the image
+// containerID: the ID of the container
+// pause: whether to pause the container before committing
+func (impl *imageInterfaceImpl) Commit(ctx context.Context, imageName, containerID string, pause bool) error {
 	options := types.ContainerCommitOptions{
 		Stdout:   impl.Stdout,
 		GOptions: impl.GlobalOptions,
 		Pause:    pause,
 	}
 
-	client, ctx, cancel, err := clientutil.NewClient(context.Background(), options.GOptions.Namespace, options.GOptions.Address)
-	if err != nil {
-		return err
-	}
-	defer cancel()
-
 	tmpName := imageName + "tmp"
 
-	if err = container.Commit(ctx, client, tmpName, containerID, options); err != nil {
+	if err := container.Commit(ctx, impl.Client, tmpName, containerID, options); err != nil {
 		return err
 	}
 
-	if err = impl.convert(tmpName, imageName); err != nil {
+	if err := impl.convert(ctx, tmpName, imageName); err != nil {
 		return err
 	}
 
-	return impl.remove(tmpName, true, false)
+	return impl.remove(ctx, tmpName, true, false)
 }
 
-// convert 将镜像转换为指定格式
-// srcRawRef: 源镜像引用
-// destRawRef: 目标镜像引用
-func (impl *imageInterfaceImpl) convert(srcRawRef, destRawRef string) error {
+// convert converts an image to the specified format
+// srcRawRef: the source image reference
+// destRawRef: the destination image reference
+func (impl *imageInterfaceImpl) convert(ctx context.Context, srcRawRef, destRawRef string) error {
 	options := types.ImageConvertOptions{
 		GOptions: impl.GlobalOptions,
 		Oci:      true,
 		Stdout:   impl.Stdout,
 	}
-
-	client, ctx, cancel, err := clientutil.NewClient(context.Background(), options.GOptions.Namespace, options.GOptions.Address)
-	if err != nil {
-		return err
-	}
-	defer cancel()
-
-	return image.Convert(ctx, client, srcRawRef, destRawRef, options)
+	return image.Convert(ctx, impl.Client, srcRawRef, destRawRef, options)
 }
 
-// remove 删除指定的镜像
-// args: 镜像列表
-// force: 是否强制删除
-// async: 是否异步删除
-func (impl *imageInterfaceImpl) remove(args string, force, async bool) error {
+// remove deletes the specified image
+// args: the list of images
+// force: whether to force delete
+// async: whether to delete asynchronously
+func (impl *imageInterfaceImpl) remove(ctx context.Context, args string, force, async bool) error {
 	options := types.ImageRemoveOptions{
 		Stdout:   impl.Stdout,
 		GOptions: impl.GlobalOptions,
 		Force:    force,
 		Async:    async,
 	}
-
-	client, ctx, cancel, err := clientutil.NewClient(context.Background(), options.GOptions.Namespace, options.GOptions.Address)
-	if err != nil {
-		return err
-	}
-	defer cancel()
-
-	return image.Remove(ctx, client, []string{args}, options)
+	return image.Remove(ctx, impl.Client, []string{args}, options)
 }
 
-// Push 推送镜像到远程仓库
-// args: 镜像列表
-func (impl *imageInterfaceImpl) Push(args []string) error {
+// Push pushes an image to a remote repository
+// args: the list of images
+func (impl *imageInterfaceImpl) Push(ctx context.Context, args []string) error {
 	options := types.ImagePushOptions{
 		GOptions: impl.GlobalOptions,
 		Stdout:   impl.Stdout,
 	}
 
-	client, ctx, cancel, err := clientutil.NewClient(context.Background(), options.GOptions.Namespace, options.GOptions.Address)
-	if err != nil {
-		return err
-	}
-	defer cancel()
-
-	return image.Push(ctx, client, args[0], options)
+	return image.Push(ctx, impl.Client, args[0], options)
 }
 
-// Login 登录到镜像仓库
-// serverAddress: 仓库地址
-// username: 用户名
-// password: 密码
-func (impl *imageInterfaceImpl) Login(serverAddress, username, password string) error {
+// Login logs in to the image registry
+// serverAddress: the registry address
+// username: the username
+// password: the password
+func (impl *imageInterfaceImpl) Login(ctx context.Context, serverAddress, username, password string) error {
 	options := types.LoginCommandOptions{
 		GOptions: impl.GlobalOptions,
 		Username: username,
@@ -138,5 +125,5 @@ func (impl *imageInterfaceImpl) Login(serverAddress, username, password string) 
 		options.ServerAddress = serverAddress
 	}
 
-	return login.Login(context.Background(), options, impl.Stdout)
+	return login.Login(ctx, options, impl.Stdout)
 }
