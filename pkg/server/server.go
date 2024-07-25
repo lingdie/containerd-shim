@@ -3,14 +3,16 @@ package server
 import (
 	"context"
 	"cri-shim/pkg/container"
+	imageutil "cri-shim/pkg/image"
+	netutil "cri-shim/pkg/net"
 	"cri-shim/pkg/types"
 	"encoding/json"
+	"github.com/containerd/containerd/namespaces"
 	"log/slog"
 	"net"
 	"os"
+	"strings"
 	"time"
-
-	netutil "cri-shim/pkg/net"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -36,6 +38,7 @@ type Server struct {
 	listener    net.Listener
 	options     Options
 	bufListener *bufconn.Listener
+	imageClient imageutil.ImageInterface
 }
 
 func New(options Options) (*Server, error) {
@@ -44,10 +47,16 @@ func New(options Options) (*Server, error) {
 		return nil, err
 	}
 	server := grpc.NewServer()
+
+	imageClient, err := imageutil.NewImageInterface(imageutil.DefaultNamespace, options.CRISocket, os.Stdout)
+	if err != nil {
+		return nil, err
+	}
 	return &Server{
-		server:   server,
-		listener: listener,
-		options:  options,
+		server:      server,
+		listener:    listener,
+		options:     options,
+		imageClient: imageClient,
 	}, nil
 }
 
@@ -69,6 +78,7 @@ func (s *Server) Start() error {
 func (s *Server) Stop() {
 	s.server.Stop()
 	s.listener.Close()
+	s.imageClient.Stop()
 }
 
 func (s *Server) Version(ctx context.Context, request *runtimeapi.VersionRequest) (*runtimeapi.VersionResponse, error) {
@@ -137,11 +147,26 @@ func (s *Server) RemoveContainer(ctx context.Context, request *runtimeapi.Remove
 		return nil, err
 	}
 
-	if ContainerNeedCommit(statusResp) {
+	registry, imageRef, flag, err := ContainerEnv(statusResp)
+
+	//commit image
+	if flag && err == nil {
 		// todo report failed to commit containers
 		// skip commit if container is not running
 		if statusResp.Status.State != runtimeapi.ContainerState_CONTAINER_RUNNING {
 			// do something, should we remove container if we can't commit it?
+		}
+
+		ctx = namespaces.WithNamespace(ctx, imageutil.DefaultNamespace)
+
+		if err = s.imageClient.Login(ctx, registry.LoginAddress, registry.UserName, registry.Password); err != nil {
+			slog.Error("failed to login register", "error", err)
+			return nil, err
+		}
+
+		if err = s.imageClient.Commit(ctx, registry.GetImageRef(imageRef), statusResp.Status.Id, false); err != nil {
+			slog.Error("failed to commit container", "error", err)
+			return nil, err
 		}
 	}
 
@@ -258,17 +283,45 @@ func (s *Server) RuntimeConfig(ctx context.Context, request *runtimeapi.RuntimeC
 	return s.client.RuntimeConfig(ctx, request)
 }
 
-// ContainerNeedCommit checks if the container needs to be committed before removal.
-func ContainerNeedCommit(resp *runtimeapi.ContainerStatusResponse) bool {
+func ContainerEnv(resp *runtimeapi.ContainerStatusResponse) (*imageutil.Registry, string, bool, error) {
 	info := &container.Info{}
 	if err := json.Unmarshal([]byte(resp.Info["info"]), info); err != nil {
 		slog.Error("failed to unmarshal container info", "error", err)
+		return nil, "", false, err
 	}
 	slog.Debug("Got container info env", "info env", info.Config.Envs)
+	var registryName, userName, password, imageName, repo string
+	flag := false
+
+	envMap := map[string]*string{
+		types.ImageRegistryAddressOnEnv:    &registryName,
+		types.ImageRegistryUserNameOnEnv:   &userName,
+		types.ImageRegistryPasswordOnEnv:   &password,
+		types.ImageNameOnEnv:               &imageName,
+		types.ImageRegistryRepositoryOnEnv: &repo,
+	}
+
 	for _, env := range info.Config.Envs {
-		if env.Key == types.ContainerCommitOnStopEnvFlag && env.Value == types.ContainerCommitOnStopEnvEnableValue {
-			return true
+		if env.Key == types.ContainerCommitOnStopEnvFlag {
+			if env.Value != types.ContainerCommitOnStopEnvEnableValue {
+				return nil, "", false, nil
+			}
+			flag = true
+			continue
+		}
+
+		if target, exists := envMap[env.Key]; exists {
+			*target = env.Value
 		}
 	}
-	return false
+
+	if imageName == "" {
+		imageName = resp.Status.Image.Image
+		parts := strings.Split(imageName, "/")
+		if len(parts) > 1 {
+			imageName = strings.Join(parts[len(parts)-1:], "/")
+		}
+	}
+
+	return imageutil.NewRegistry(registryName, repo, userName, password), imageName, flag, nil
 }
