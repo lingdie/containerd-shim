@@ -14,8 +14,12 @@ spec:
       image: busybox:latest
       command: [ "sleep", "3600000" ]
       env:
+        # commit on stop
         - name: SEALOS_COMMIT_ON_STOP
           value: "true"
+        # commit image name
+        - name: SEALOS_COMMIT_IMAGE_NAME
+          value: "docker.io/labring/busybox-commit:dev"
     - name: busybox-2
       image: busybox:latest
       command: [ "sleep", "3600000" ]
