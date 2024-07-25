@@ -137,54 +137,14 @@ func (s *Server) StartContainer(ctx context.Context, request *runtimeapi.StartCo
 func (s *Server) StopContainer(ctx context.Context, request *runtimeapi.StopContainerRequest) (*runtimeapi.StopContainerResponse, error) {
 	// todo check container env and create commit
 	slog.Info("Doing stop container request", "request", request)
-
+	if err := s.CommitContainer(ctx, request.ContainerId); err != nil {
+		return nil, err
+	}
 	return s.client.StopContainer(ctx, request)
 }
 
 func (s *Server) RemoveContainer(ctx context.Context, request *runtimeapi.RemoveContainerRequest) (*runtimeapi.RemoveContainerResponse, error) {
-	slog.Debug("Doing remove container request", "request", request)
-
-	statusReq := &runtimeapi.ContainerStatusRequest{
-		ContainerId: request.ContainerId,
-		Verbose:     true,
-	}
-	statusResp, err := s.client.ContainerStatus(ctx, statusReq)
-	if err != nil {
-		slog.Error("failed to get container status", "error", err)
-		return nil, err
-	}
-
-	registry, imageRef, flag, err := s.GetInfoFromContainerEnv(statusResp)
-
-	//commit image
-	if flag && err == nil {
-		// todo report failed to commit containers
-		// skip commit if container is not running
-		if statusResp.Status.State != runtimeapi.ContainerState_CONTAINER_RUNNING {
-			// do something, should we remove container if we can't commit it?
-		}
-
-		ctx = namespaces.WithNamespace(ctx, s.options.ContainerdNamespace)
-
-		if err = s.imageClient.Login(ctx, registry.LoginAddress, registry.UserName, registry.Password); err != nil {
-			slog.Error("failed to login register", "error", err)
-			return nil, err
-		}
-
-		imageName := registry.GetImageRef(imageRef)
-
-		if err = s.imageClient.Commit(ctx, imageName, statusResp.Status.Id, false); err != nil {
-			slog.Error("failed to commit container", "error", err)
-			return nil, err
-		}
-
-		if err = s.imageClient.Push(ctx, imageName); err != nil {
-			slog.Error("failed to push container", "error", err)
-			return nil, err
-		}
-
-	}
-
+	slog.Info("Doing remove container request", "request", request)
 	return s.client.RemoveContainer(ctx, request)
 }
 
@@ -296,6 +256,51 @@ func (s *Server) ListPodSandboxMetrics(ctx context.Context, request *runtimeapi.
 func (s *Server) RuntimeConfig(ctx context.Context, request *runtimeapi.RuntimeConfigRequest) (*runtimeapi.RuntimeConfigResponse, error) {
 	slog.Info("Doing runtime config request", "request", request)
 	return s.client.RuntimeConfig(ctx, request)
+}
+
+func (s *Server) CommitContainer(ctx context.Context, id string) error {
+	statusReq := &runtimeapi.ContainerStatusRequest{
+		ContainerId: id,
+		Verbose:     true,
+	}
+	statusResp, err := s.client.ContainerStatus(ctx, statusReq)
+	if err != nil {
+		slog.Error("failed to get container status", "error", err)
+		return err
+	}
+
+	registry, imageRef, flag, err := s.GetInfoFromContainerEnv(statusResp)
+
+	//commit image
+	if flag && err == nil {
+		// todo report failed to commit containers
+		// skip commit if container is not running
+		if statusResp.Status.State != runtimeapi.ContainerState_CONTAINER_RUNNING {
+			// do something, should we remove container if we can't commit it?
+		}
+
+		ctx = namespaces.WithNamespace(ctx, s.options.ContainerdNamespace)
+
+		imageName := registry.GetImageRef(imageRef)
+
+		if err = s.imageClient.Commit(ctx, imageName, statusResp.Status.Id, false); err != nil {
+			slog.Error("failed to commit container", "error", err)
+			return err
+		}
+
+		if registry.UserName != "" && registry.Password != "" {
+			if err = s.imageClient.Login(ctx, registry.LoginAddress, registry.UserName, registry.Password); err != nil {
+				slog.Error("failed to login register", "error", err)
+				return err
+			}
+
+			if err = s.imageClient.Push(ctx, imageName); err != nil {
+				slog.Error("failed to push container", "error", err)
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (s *Server) GetInfoFromContainerEnv(resp *runtimeapi.ContainerStatusResponse) (*imageutil.Registry, string, bool, error) {
