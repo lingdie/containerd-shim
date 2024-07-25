@@ -2,18 +2,19 @@ package server
 
 import (
 	"context"
-	"cri-shim/pkg/container"
-	imageutil "cri-shim/pkg/image"
-	netutil "cri-shim/pkg/net"
-	"cri-shim/pkg/types"
 	"encoding/json"
-	"github.com/containerd/containerd/namespaces"
 	"log/slog"
 	"net"
 	"os"
 	"strings"
 	"time"
 
+	"cri-shim/pkg/container"
+	imageutil "cri-shim/pkg/image"
+	netutil "cri-shim/pkg/net"
+	"cri-shim/pkg/types"
+
+	"github.com/containerd/containerd/namespaces"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -21,9 +22,11 @@ import (
 )
 
 type Options struct {
-	Timeout    time.Duration
-	ShimSocket string
-	CRISocket  string
+	Timeout             time.Duration
+	ShimSocket          string
+	ContainerdNamespace string
+
+	CRISocket string
 	// User is the user ID for our gRPC socket.
 	User int
 	// Group is the group ID for our gRPC socket.
@@ -33,30 +36,34 @@ type Options struct {
 }
 
 type Server struct {
+	options               Options
+	globalRegistryOptions imageutil.RegistryOptions
+
 	client      runtimeapi.RuntimeServiceClient
 	server      *grpc.Server
 	listener    net.Listener
-	options     Options
 	bufListener *bufconn.Listener
 	imageClient imageutil.ImageInterface
 }
 
-func New(options Options) (*Server, error) {
+func New(options Options, registryOptions imageutil.RegistryOptions) (*Server, error) {
 	listener, err := net.Listen("unix", options.ShimSocket)
 	if err != nil {
 		return nil, err
 	}
 	server := grpc.NewServer()
 
-	imageClient, err := imageutil.NewImageInterface(imageutil.DefaultNamespace, options.CRISocket, os.Stdout)
+	imageClient, err := imageutil.NewImageInterface(options.ContainerdNamespace, options.CRISocket, os.Stdout)
 	if err != nil {
 		return nil, err
 	}
 	return &Server{
 		server:      server,
 		listener:    listener,
-		options:     options,
 		imageClient: imageClient,
+
+		options:               options,
+		globalRegistryOptions: registryOptions,
 	}, nil
 }
 
@@ -147,7 +154,7 @@ func (s *Server) RemoveContainer(ctx context.Context, request *runtimeapi.Remove
 		return nil, err
 	}
 
-	registry, imageRef, flag, err := ContainerEnv(statusResp)
+	registry, imageRef, flag, err := s.GetInfoFromContainerEnv(statusResp)
 
 	//commit image
 	if flag && err == nil {
@@ -157,7 +164,7 @@ func (s *Server) RemoveContainer(ctx context.Context, request *runtimeapi.Remove
 			// do something, should we remove container if we can't commit it?
 		}
 
-		ctx = namespaces.WithNamespace(ctx, imageutil.DefaultNamespace)
+		ctx = namespaces.WithNamespace(ctx, s.options.ContainerdNamespace)
 
 		if err = s.imageClient.Login(ctx, registry.LoginAddress, registry.UserName, registry.Password); err != nil {
 			slog.Error("failed to login register", "error", err)
@@ -283,45 +290,48 @@ func (s *Server) RuntimeConfig(ctx context.Context, request *runtimeapi.RuntimeC
 	return s.client.RuntimeConfig(ctx, request)
 }
 
-func ContainerEnv(resp *runtimeapi.ContainerStatusResponse) (*imageutil.Registry, string, bool, error) {
+func (s *Server) GetInfoFromContainerEnv(resp *runtimeapi.ContainerStatusResponse) (*imageutil.Registry, string, bool, error) {
 	info := &container.Info{}
 	if err := json.Unmarshal([]byte(resp.Info["info"]), info); err != nil {
 		slog.Error("failed to unmarshal container info", "error", err)
 		return nil, "", false, err
 	}
 	slog.Debug("Got container info env", "info env", info.Config.Envs)
-	var registryName, userName, password, imageName, repo string
-	flag := false
 
+	var registryName, userName, password, imageName, repo, commitOnStop string
 	envMap := map[string]*string{
-		types.ImageRegistryAddressOnEnv:    &registryName,
-		types.ImageRegistryUserNameOnEnv:   &userName,
-		types.ImageRegistryPasswordOnEnv:   &password,
-		types.ImageNameOnEnv:               &imageName,
-		types.ImageRegistryRepositoryOnEnv: &repo,
+		types.ImageRegistryAddressOnEnv:           &registryName,
+		types.ImageRegistryUserNameOnEnv:          &userName,
+		types.ImageRegistryPasswordOnEnv:          &password,
+		types.ImageNameOnEnv:                      &imageName,
+		types.ImageRegistryRepositoryOnEnv:        &repo,
+		types.ContainerCommitOnStopEnvEnableValue: &commitOnStop,
 	}
-
 	for _, env := range info.Config.Envs {
-		if env.Key == types.ContainerCommitOnStopEnvFlag {
-			if env.Value != types.ContainerCommitOnStopEnvEnableValue {
-				return nil, "", false, nil
-			}
-			flag = true
-			continue
-		}
-
 		if target, exists := envMap[env.Key]; exists {
 			*target = env.Value
 		}
 	}
+	slog.Debug("Got container env", "registry", registryName, "user", userName, "password", password, "image", imageName, "repo", repo, "commitOnStop", commitOnStop)
 
 	if imageName == "" {
 		imageName = resp.Status.Image.Image
 		parts := strings.Split(imageName, "/")
+		// todo add more check for image name
 		if len(parts) > 1 {
 			imageName = strings.Join(parts[len(parts)-1:], "/")
 		}
 	}
+	envRegistryOpt := imageutil.RegistryOptions{
+		RegistryAddr: registryName,
+		UserName:     userName,
+		Password:     password,
+		Repository:   repo,
+	}
 
-	return imageutil.NewRegistry(registryName, repo, userName, password), imageName, flag, nil
+	flag := false
+	if commitOnStop == types.ContainerCommitOnStopEnvEnableValue {
+		flag = true
+	}
+	return imageutil.NewRegistry(s.globalRegistryOptions, envRegistryOpt, s.options.ContainerdNamespace), imageName, flag, nil
 }

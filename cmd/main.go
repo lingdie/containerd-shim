@@ -1,7 +1,6 @@
 package main
 
 import (
-	imageutil "cri-shim/pkg/image"
 	"flag"
 	"log/slog"
 	"os"
@@ -9,30 +8,38 @@ import (
 	"syscall"
 	"time"
 
+	imageutil "cri-shim/pkg/image"
 	"cri-shim/pkg/server"
 )
 
-var criSocket, shimSocket string
+var criSocket, shimSocket, globalRegistryAddr, globalRegistryUser, globalRegistryPassword, globalRegistryRepo, containerdNamespace string
 var debug bool
 
 func main() {
 	flag.StringVar(&criSocket, "cri-socket", "unix:///var/run/containerd/containerd.sock", "CRI socket path")
 	flag.StringVar(&shimSocket, "shim-socket", "/var/run/sealos/containerd-shim.sock", "CRI shim socket path")
-	flag.StringVar(&imageutil.DefaultUserName, "username", "", "Image Hub username")
-	flag.StringVar(&imageutil.DefaultPassword, "password", "", "Image Hub password")
+	flag.StringVar(&globalRegistryAddr, "global-registry-addr", "docker.io", "Global registry address")
+	flag.StringVar(&globalRegistryUser, "global-registry-user", "", "Global registry username")
+	flag.StringVar(&globalRegistryPassword, "global-registry-password", "", "Global registry password")
+	flag.StringVar(&globalRegistryRepo, "global-registry-repository", "", "Global registry repository")
+	flag.StringVar(&containerdNamespace, "containerd-namespace", "k8s.io", "Containerd namespace")
+
 	flag.BoolVar(&debug, "debug", false, "enable debug logging")
 	flag.Parse()
 
-	if imageutil.DefaultUserName == "" {
-		slog.Error("failed to get username", nil)
-		return
-	}
-
-	s, err := server.New(server.Options{
-		Timeout:    time.Minute * 5,
-		ShimSocket: shimSocket,
-		CRISocket:  criSocket,
-	})
+	s, err := server.New(
+		server.Options{
+			Timeout:             time.Minute * 5,
+			ShimSocket:          shimSocket,
+			CRISocket:           criSocket,
+			ContainerdNamespace: containerdNamespace,
+		},
+		imageutil.RegistryOptions{
+			RegistryAddr: globalRegistryAddr,
+			UserName:     globalRegistryUser,
+			Password:     globalRegistryPassword,
+			Repository:   globalRegistryRepo,
+		})
 	if debug {
 		slog.SetLogLoggerLevel(slog.LevelDebug)
 	}

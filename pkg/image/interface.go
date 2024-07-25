@@ -2,13 +2,14 @@ package image
 
 import (
 	"context"
+	"io"
+
 	"github.com/containerd/containerd"
 	"github.com/containerd/nerdctl/v2/pkg/api/types"
 	"github.com/containerd/nerdctl/v2/pkg/clientutil"
 	"github.com/containerd/nerdctl/v2/pkg/cmd/container"
 	"github.com/containerd/nerdctl/v2/pkg/cmd/image"
 	"github.com/containerd/nerdctl/v2/pkg/cmd/login"
-	"io"
 )
 
 // ImageInterface defines the interface for image operations
@@ -47,7 +48,7 @@ func NewImageInterface(namespace, address string, writer io.Writer) (ImageInterf
 }
 
 func (impl *imageInterfaceImpl) Stop() {
-	impl.Cancel()
+	impl.Client.Close()
 }
 
 // Commit commits a container as an image

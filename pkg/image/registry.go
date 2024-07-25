@@ -1,32 +1,32 @@
 package image
 
-const (
-	DefaultName      = "docker.io"
-	DefaultNamespace = "k8s.io"
-)
-
-var (
-	DefaultUserName = ""
-	DefaultPassword = ""
-)
+type RegistryOptions struct {
+	RegistryAddr string
+	UserName     string
+	Password     string
+	Repository   string
+}
 
 type Registry struct {
-	Name         string
-	Namespace    string
+	ContainerdNamespace string
+
+	RegistryAddr string
 	UserName     string
 	Password     string
 	Repository   string
 	LoginAddress string
 }
 
-func NewRegistry(name, repo, userName, password string) *Registry {
+func NewRegistry(globalRegistry RegistryOptions, envRegistry RegistryOptions, containerNamespace string) *Registry {
 	registry := &Registry{
-		Name:         checkEmpty(name, DefaultName),
-		Namespace:    DefaultNamespace,
-		UserName:     checkEmpty(userName, DefaultUserName),
-		Password:     checkEmpty(password, DefaultPassword),
-		Repository:   repo,
-		LoginAddress: checkEmpty(name, DefaultName),
+		ContainerdNamespace: containerNamespace,
+
+		RegistryAddr: checkEmpty(envRegistry.RegistryAddr, globalRegistry.RegistryAddr),
+		UserName:     checkEmpty(envRegistry.UserName, globalRegistry.UserName),
+		// do not expose password
+		Password:     checkEmpty(envRegistry.Password, ""),
+		Repository:   checkEmpty(envRegistry.Repository, globalRegistry.Repository),
+		LoginAddress: checkEmpty(envRegistry.RegistryAddr, globalRegistry.RegistryAddr),
 	}
 	if registry.LoginAddress == "docker.io" {
 		registry.LoginAddress = ""
@@ -36,9 +36,9 @@ func NewRegistry(name, repo, userName, password string) *Registry {
 
 func (r Registry) GetImageRef(image string) string {
 	if r.Repository == "" {
-		return r.Name + "/" + r.UserName + "/" + image
+		return r.RegistryAddr + "/" + r.UserName + "/" + image
 	}
-	return r.Name + "/" + r.Repository + "/" + r.UserName + "/" + image
+	return r.RegistryAddr + "/" + r.Repository + "/" + r.UserName + "/" + image
 }
 
 func checkEmpty(value, defaultValue string) string {
