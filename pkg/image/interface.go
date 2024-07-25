@@ -32,8 +32,9 @@ type imageInterfaceImpl struct {
 // writer: the io.Writer for output
 func NewImageInterface(namespace, address string, writer io.Writer) (ImageInterface, error) {
 	global := types.GlobalCommandOptions{
-		Namespace: namespace,
-		Address:   address,
+		Namespace:        namespace,
+		Address:          address,
+		InsecureRegistry: true,
 	}
 	impl := &imageInterfaceImpl{
 		GlobalOptions: global,
