@@ -19,7 +19,13 @@ spec:
           value: "true"
         # commit image name
         - name: SEALOS_COMMIT_IMAGE_NAME
-          value: "docker.io/labring/busybox-commit:dev"
+          value: "busybox-commit:dev"
+        - name: SEALOS_COMMIT_IMAGE_REGISTRY_REPOSITORY
+          value: "xxx"
+        - name: SEALOS_COMMIT_IMAGE_REGISTRY_USER
+          value: "xxx"
+        - name: SEALOS_COMMIT_IMAGE_REGISTRY_PASSWORD
+          value: "xxx"
     - name: busybox-2
       image: busybox:latest
       command: [ "sleep", "3600000" ]

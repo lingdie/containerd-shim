@@ -49,8 +49,9 @@ Create a pod using yaml file: `test/busybox.yaml`, then after pod created, exec 
 file in the pod directory.
 
 ```bash
+# you may need to change the image registry addr, user, password and related env to the one you have
 kubectl apply -f test/busybox.yaml
-kubectl exec -it commit -n commit-test -c busybox-1 -- echo "hello world" > /tmp/test && cat /tmp/test
+kubectl exec -it commit -n commit-test -c busybox-1 -- sh -c 'echo "hello world" > /tmp/test && cat /tmp/test'
 ```
 
 Delete the pod:
@@ -62,7 +63,7 @@ kubectl delete pod commit -n commit-test
 See the logs of the shim and check images in k8s.io namespace:
 
 ```bash
-crictl images --namespace k8s.io
+crictl images
 ```
 
 After the pod is deleted, the commit image should be generated.
