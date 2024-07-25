@@ -1,5 +1,7 @@
 package image
 
+import "strings"
+
 type RegistryOptions struct {
 	RegistryAddr string
 	UserName     string
@@ -35,6 +37,10 @@ func NewRegistry(globalRegistry RegistryOptions, envRegistry RegistryOptions, co
 }
 
 func (r Registry) GetImageRef(image string) string {
+	parts := strings.Split(image, "/")
+	if len(parts) > 1 {
+		return image
+	}
 	if r.Repository == "" {
 		return r.RegistryAddr + "/" + r.UserName + "/" + image
 	}
