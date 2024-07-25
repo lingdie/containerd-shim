@@ -13,7 +13,7 @@ import (
 
 // ImageInterface defines the interface for image operations
 type ImageInterface interface {
-	Push(ctx context.Context, args []string) error
+	Push(ctx context.Context, args string) error
 	Commit(ctx context.Context, imageName, containerID string, pause bool) error
 	Login(ctx context.Context, serverAddress, username, password string) error
 	Stop()
@@ -102,13 +102,13 @@ func (impl *imageInterfaceImpl) remove(ctx context.Context, args string, force, 
 
 // Push pushes an image to a remote repository
 // args: the list of images
-func (impl *imageInterfaceImpl) Push(ctx context.Context, args []string) error {
+func (impl *imageInterfaceImpl) Push(ctx context.Context, args string) error {
 	options := types.ImagePushOptions{
 		GOptions: impl.GlobalOptions,
 		Stdout:   impl.Stdout,
 	}
 
-	return image.Push(ctx, impl.Client, args[0], options)
+	return image.Push(ctx, impl.Client, args, options)
 }
 
 // Login logs in to the image registry

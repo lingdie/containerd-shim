@@ -164,10 +164,18 @@ func (s *Server) RemoveContainer(ctx context.Context, request *runtimeapi.Remove
 			return nil, err
 		}
 
-		if err = s.imageClient.Commit(ctx, registry.GetImageRef(imageRef), statusResp.Status.Id, false); err != nil {
+		imageName := registry.GetImageRef(imageRef)
+
+		if err = s.imageClient.Commit(ctx, imageName, statusResp.Status.Id, false); err != nil {
 			slog.Error("failed to commit container", "error", err)
 			return nil, err
 		}
+
+		if err = s.imageClient.Push(ctx, imageName); err != nil {
+			slog.Error("failed to push container", "error", err)
+			return nil, err
+		}
+
 	}
 
 	return s.client.RemoveContainer(ctx, request)
