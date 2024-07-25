@@ -308,12 +308,12 @@ func (s *Server) GetInfoFromContainerEnv(resp *runtimeapi.ContainerStatusRespons
 
 	var registryName, userName, password, imageName, repo, commitOnStop string
 	envMap := map[string]*string{
-		types.ImageRegistryAddressOnEnv:           &registryName,
-		types.ImageRegistryUserNameOnEnv:          &userName,
-		types.ImageRegistryPasswordOnEnv:          &password,
-		types.ImageNameOnEnv:                      &imageName,
-		types.ImageRegistryRepositoryOnEnv:        &repo,
-		types.ContainerCommitOnStopEnvEnableValue: &commitOnStop,
+		types.ImageRegistryAddressOnEnv:    &registryName,
+		types.ImageRegistryUserNameOnEnv:   &userName,
+		types.ImageRegistryPasswordOnEnv:   &password,
+		types.ImageNameOnEnv:               &imageName,
+		types.ImageRegistryRepositoryOnEnv: &repo,
+		types.ContainerCommitOnStopEnvFlag: &commitOnStop,
 	}
 	for _, env := range info.Config.Envs {
 		if target, exists := envMap[env.Key]; exists {
