@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	customErr "cri-shim/pkg/errors"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net"
 	"os"
@@ -272,7 +274,7 @@ func (s *Server) CommitContainer(ctx context.Context, id string) error {
 	registry, imageRef, flag, err := s.GetInfoFromContainerEnv(statusResp)
 
 	//commit image
-	if flag && err == nil {
+	if flag && (err == nil || errors.Is(err, customErr.ErrPasswordNotFound)) {
 		// todo report failed to commit containers
 		// skip commit if container is not running
 		if statusResp.Status.State != runtimeapi.ContainerState_CONTAINER_RUNNING {
@@ -288,7 +290,7 @@ func (s *Server) CommitContainer(ctx context.Context, id string) error {
 			return err
 		}
 
-		if registry.UserName != "" && registry.Password != "" {
+		if err == nil {
 			if err = s.imageClient.Login(ctx, registry.LoginAddress, registry.UserName, registry.Password); err != nil {
 				slog.Error("failed to login register", "error", err)
 				return err
@@ -298,6 +300,8 @@ func (s *Server) CommitContainer(ctx context.Context, id string) error {
 				slog.Error("failed to push container", "error", err)
 				return err
 			}
+		} else {
+			slog.Error("not found password", "error", err)
 		}
 	}
 	return nil
@@ -346,5 +350,11 @@ func (s *Server) GetInfoFromContainerEnv(resp *runtimeapi.ContainerStatusRespons
 	if commitOnStop == types.ContainerCommitOnStopEnvEnableValue {
 		flag = true
 	}
-	return imageutil.NewRegistry(s.globalRegistryOptions, envRegistryOpt, s.options.ContainerdNamespace), imageName, flag, nil
+
+	var err error
+	if userName != "" && password == "" {
+		err = customErr.ErrPasswordNotFound
+	}
+
+	return imageutil.NewRegistry(s.globalRegistryOptions, envRegistryOpt, s.options.ContainerdNamespace), imageName, flag, err
 }

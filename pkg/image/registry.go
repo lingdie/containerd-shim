@@ -26,7 +26,7 @@ func NewRegistry(globalRegistry RegistryOptions, envRegistry RegistryOptions, co
 		RegistryAddr: checkEmpty(envRegistry.RegistryAddr, globalRegistry.RegistryAddr),
 		UserName:     checkEmpty(envRegistry.UserName, globalRegistry.UserName),
 		// do not expose password
-		Password:     checkEmpty(envRegistry.Password, ""),
+		Password:     checkEmpty(envRegistry.Password, globalRegistry.Password),
 		Repository:   checkEmpty(envRegistry.Repository, globalRegistry.Repository),
 		LoginAddress: checkEmpty(envRegistry.RegistryAddr, globalRegistry.RegistryAddr),
 	}
