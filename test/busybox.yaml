@@ -26,6 +26,8 @@ spec:
           value: "xxx"
         - name: SEALOS_COMMIT_IMAGE_REGISTRY_PASSWORD
           value: "xxx"
+        - name: SEALOS_USER
+          value: "xxx"
     - name: busybox-2
       image: busybox:latest
       command: [ "sleep", "3600000" ]

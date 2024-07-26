@@ -315,7 +315,7 @@ func (s *Server) GetInfoFromContainerEnv(resp *runtimeapi.ContainerStatusRespons
 	}
 	slog.Debug("Got container info env", "info env", info.Config.Envs)
 
-	var registryName, userName, password, imageName, repo, commitOnStop string
+	var registryName, userName, password, imageName, repo, commitOnStop, sealosUsername string
 	envMap := map[string]*string{
 		types.ImageRegistryAddressOnEnv:    &registryName,
 		types.ImageRegistryUserNameOnEnv:   &userName,
@@ -323,6 +323,7 @@ func (s *Server) GetInfoFromContainerEnv(resp *runtimeapi.ContainerStatusRespons
 		types.ImageNameOnEnv:               &imageName,
 		types.ImageRegistryRepositoryOnEnv: &repo,
 		types.ContainerCommitOnStopEnvFlag: &commitOnStop,
+		types.SealosUsernameOnEnv:          &sealosUsername,
 	}
 	for _, env := range info.Config.Envs {
 		if target, exists := envMap[env.Key]; exists {
@@ -356,5 +357,5 @@ func (s *Server) GetInfoFromContainerEnv(resp *runtimeapi.ContainerStatusRespons
 		err = customErr.ErrPasswordNotFound
 	}
 
-	return imageutil.NewRegistry(s.globalRegistryOptions, envRegistryOpt, s.options.ContainerdNamespace), imageName, flag, err
+	return imageutil.NewRegistry(s.globalRegistryOptions, envRegistryOpt, s.options.ContainerdNamespace, sealosUsername), imageName, flag, err
 }

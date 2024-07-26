@@ -8,4 +8,5 @@ const (
 	ImageRegistryPasswordOnEnv          = "SEALOS_COMMIT_IMAGE_REGISTRY_PASSWORD"
 	ImageRegistryRepositoryOnEnv        = "SEALOS_COMMIT_IMAGE_REGISTRY_REPOSITORY"
 	ImageNameOnEnv                      = "SEALOS_COMMIT_IMAGE_NAME"
+	SealosUsernameOnEnv                 = "SEALOS_USER"
 )
