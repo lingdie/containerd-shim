@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	customErr "cri-shim/pkg/errors"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -11,10 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"cri-shim/pkg/container"
-	imageutil "cri-shim/pkg/image"
-	netutil "cri-shim/pkg/net"
-	"cri-shim/pkg/types"
+	"github.com/labring/cri-shim/pkg/container"
+	errutil "github.com/labring/cri-shim/pkg/errors"
+	imageutil "github.com/labring/cri-shim/pkg/image"
+	netutil "github.com/labring/cri-shim/pkg/net"
+	"github.com/labring/cri-shim/pkg/types"
 
 	"github.com/containerd/containerd/namespaces"
 	"google.golang.org/grpc"
@@ -274,7 +274,7 @@ func (s *Server) CommitContainer(ctx context.Context, id string) error {
 	registry, imageRef, flag, err := s.GetInfoFromContainerEnv(statusResp)
 
 	//commit image
-	if flag && (err == nil || errors.Is(err, customErr.ErrPasswordNotFound)) {
+	if flag && (err == nil || errors.Is(err, errutil.ErrPasswordNotFound)) {
 		// todo report failed to commit containers
 		// skip commit if container is not running
 		if statusResp.Status.State != runtimeapi.ContainerState_CONTAINER_RUNNING {
@@ -354,7 +354,7 @@ func (s *Server) GetInfoFromContainerEnv(resp *runtimeapi.ContainerStatusRespons
 
 	var err error
 	if userName != "" && password == "" {
-		err = customErr.ErrPasswordNotFound
+		err = errutil.ErrPasswordNotFound
 	}
 
 	return imageutil.NewRegistry(s.globalRegistryOptions, envRegistryOpt, s.options.ContainerdNamespace, sealosUsername), imageName, flag, err

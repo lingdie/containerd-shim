@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	imageutil "cri-shim/pkg/image"
-	"cri-shim/pkg/server"
+	imageutil "github.com/labring/cri-shim/pkg/image"
+	"github.com/labring/cri-shim/pkg/server"
 )
 
 var criSocket, shimSocket, globalRegistryAddr, globalRegistryUser, globalRegistryPassword, globalRegistryRepo, containerdNamespace string

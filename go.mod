@@ -1,4 +1,4 @@
-module cri-shim
+module github.com/labring/cri-shim
 
 go 1.22.4
 
