@@ -1,6 +1,6 @@
 # Change these variables as necessary.
 MAIN_PACKAGE_PATH := ./cmd/main.go
-BINARY_NAME := containerd-shim
+BINARY_NAME := cri-shim
 
 # ==================================================================================== #
 # HELPERS

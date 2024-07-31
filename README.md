@@ -1,4 +1,4 @@
-# Containerd shim for Kubernetes
+# Container Runtime shim for Kubernetes
 
 This is a shim for containerd that implements the Kubernetes CRI (Container Runtime Interface).
 
@@ -19,8 +19,8 @@ make build
 ### Run the shim
 
 ```bash
-mkdir -p /var/run/sealos && touch /var/run/sealos/containerd-shim.sock
-sudo ./bin/containerd-shim --cri-socket=unix:///var/run/containerd/containerd.sock --shim-socket=/var/run/sealos/containerd-shim.sock
+mkdir -p /var/run/sealos && touch /var/run/sealos/cri-shim.sock
+sudo ./bin/cri-shim --cri-socket=unix:///var/run/containerd/containerd.sock --shim-socket=/var/run/sealos/cri-shim.sock
 ```
 
 ### Update the kubelet configuration
@@ -33,7 +33,7 @@ vim /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
 # add flag --container-runtime-endpoint to the kubelet
 
 e.g:
-ExecStart=/usr/bin/kubelet --container-runtime-endpoint=unix:///var/run/sealos/containerd-shim.sock
+ExecStart=/usr/bin/kubelet --container-runtime-endpoint=unix:///var/run/sealos/cri-shim.sock
 ```
 
 ### Restart the kubelet
